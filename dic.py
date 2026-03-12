@@ -25,7 +25,8 @@ def _get_jamdict() -> Jamdict:
 
 @st.cache_resource
 def _get_tagger() -> Tagger:
-    return Tagger(f'-d "{ipadic.DICDIR}"')
+    mecab_args = getattr(ipadic, "MECAB_ARGS", f"-d {ipadic.DICDIR}")
+    return Tagger(mecab_args)
 
 
 def _is_kana(ch: str) -> bool:
