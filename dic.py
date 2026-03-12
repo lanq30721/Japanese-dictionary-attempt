@@ -87,10 +87,40 @@ def _expand_long_vowel(kana: str) -> str:
     return "".join(out)
 
 
+def _pick_feature_reading(feature) -> str:
+    for attr in ("kana", "reading", "pron"):
+        value = getattr(feature, attr, "")
+        if value and value != "*":
+            return value
+
+    if isinstance(feature, (list, tuple)):
+        if len(feature) > 7 and feature[7] and feature[7] != "*":
+            return feature[7]
+        if feature and feature[-1] and feature[-1] != "*":
+            return feature[-1]
+    elif isinstance(feature, str):
+        parts = feature.split(",")
+        if len(parts) > 7 and parts[7] and parts[7] != "*":
+            return parts[7]
+        if parts and parts[-1] and parts[-1] != "*":
+            return parts[-1]
+
+    return ""
+
+
+def _token_reading(token) -> str:
+    feature = getattr(token, "feature", None)
+    if feature is None:
+        return token.surface
+
+    reading = _pick_feature_reading(feature)
+    return reading or token.surface
+
+
 def get_word_reading_hira(word: str) -> str:
     tagger = _get_tagger()
     tokens = list(tagger(word))
-    reading = "".join(token.feature.kana or token.surface for token in tokens)
+    reading = "".join(_token_reading(token) for token in tokens)
     return jaconv.kata2hira(reading)
 
 
