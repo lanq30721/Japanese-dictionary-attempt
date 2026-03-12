@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.tar.gz
+*.xz
+*.db
+*.sqlite
+temp_jamdict/
+.streamlit/
