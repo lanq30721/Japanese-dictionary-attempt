@@ -7,7 +7,7 @@ import jaconv
 import pandas as pd
 import streamlit as st
 import ipadic
-from fugashi import Tagger
+from fugashi import GenericTagger, Tagger
 from jamdict import Jamdict
 
 
@@ -26,7 +26,10 @@ def _get_jamdict() -> Jamdict:
 @st.cache_resource
 def _get_tagger() -> Tagger:
     mecab_args = getattr(ipadic, "MECAB_ARGS", f"-d {ipadic.DICDIR}")
-    return Tagger(mecab_args)
+    try:
+        return Tagger(mecab_args)
+    except RuntimeError:
+        return GenericTagger(mecab_args)
 
 
 def _is_kana(ch: str) -> bool:
