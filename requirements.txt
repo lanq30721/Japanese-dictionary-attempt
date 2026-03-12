@@ -1,3 +1,6 @@
 streamlit
 jamdict
 jaconv
+fugashi
+ipadic
+pandas
