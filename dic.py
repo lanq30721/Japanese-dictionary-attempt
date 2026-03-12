@@ -25,7 +25,7 @@ def _get_jamdict() -> Jamdict:
 
 @st.cache_resource
 def _get_tagger() -> Tagger:
-    return Tagger(ipadic.get_dicdir())
+    return Tagger(f'-d "{ipadic.DICDIR}"')
 
 
 def _is_kana(ch: str) -> bool:
