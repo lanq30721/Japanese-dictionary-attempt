@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple
 import jaconv
 import pandas as pd
 import streamlit as st
+import ipadic
 from fugashi import Tagger
 from jamdict import Jamdict
 
@@ -24,7 +25,7 @@ def _get_jamdict() -> Jamdict:
 
 @st.cache_resource
 def _get_tagger() -> Tagger:
-    return Tagger()
+    return Tagger(ipadic.get_dicdir())
 
 
 def _is_kana(ch: str) -> bool:
