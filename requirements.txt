@@ -1,5 +1,6 @@
 streamlit
 jamdict
+jamdict-data
 jaconv
 fugashi
 ipadic
