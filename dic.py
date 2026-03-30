@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import jaconv
 import pandas as pd
@@ -241,36 +241,71 @@ def _map_pos_labels(pos_list: List[str]) -> List[str]:
     return sorted(labels)
 
 
-def _collect_sense_details(entry) -> Tuple[List[str], List[str], List[str]]:
-    pos_labels: List[str] = []
-    gloss_cn_en: List[str] = []
-    examples: List[str] = []
-    for sense in entry.senses:
-        labels = _map_pos_labels(sense.pos)
-        pos_labels.extend(labels)
+def _extract_sense_examples(sense) -> List[Dict[str, str]]:
+    """Safely parse example sentences attached to a specific sense."""
+    extracted: List[Dict[str, str]] = []
+    raw_examples = getattr(sense, "examples", None) or []
 
-        gloss_items = []
-        for g in sense.gloss:
-            lang = getattr(g, "lang", "eng")
-            text = getattr(g, "text", str(g))
-            gloss_items.append(f"{lang}:{text}" if lang else text)
-        if gloss_items:
-            gloss_cn_en.append(" / ".join(gloss_items))
+    for ex in raw_examples:
+        jp = getattr(ex, "jp", "") if hasattr(ex, "jp") else ""
+        translation = (
+            getattr(ex, "en", "")
+            or getattr(ex, "text", "")
+            or getattr(ex, "translation", "")
+        )
+        if not jp and not translation and isinstance(ex, (tuple, list)):
+            jp = str(ex[0]) if len(ex) >= 1 else ""
+            translation = str(ex[1]) if len(ex) >= 2 else ""
+        elif not jp and not translation:
+            translation = str(ex)
 
-        if hasattr(sense, "examples") and sense.examples:
-            for ex in sense.examples:
-                if hasattr(ex, "jp"):
-                    jp = getattr(ex, "jp", "")
-                    en = getattr(ex, "en", "")
-                    if jp or en:
-                        examples.append(f"{jp} {en}".strip())
-                else:
-                    examples.append(str(ex))
+        jp = jp.strip() if isinstance(jp, str) else str(jp).strip()
+        translation = (
+            translation.strip() if isinstance(translation, str) else str(translation).strip()
+        )
+        if jp or translation:
+            extracted.append({"jp": jp, "translation": translation})
 
-    pos_labels = sorted(set(pos_labels))
-    gloss_cn_en = list(dict.fromkeys(gloss_cn_en))
-    examples = list(dict.fromkeys(examples))
-    return pos_labels, gloss_cn_en, examples
+    # de-duplicate while preserving order
+    deduped = list(dict.fromkeys((item["jp"], item["translation"]) for item in extracted))
+    return [{"jp": jp, "translation": translation} for jp, translation in deduped]
+
+
+def _collect_sense_details(entry) -> List[Dict[str, object]]:
+    """
+    Build a per-sense structured payload:
+    [
+        {
+            "sense_index": 1,
+            "pos": [...],
+            "gloss": [{"lang": "eng", "text": "..."}],
+            "examples": [{"jp": "...", "translation": "..."}]
+        },
+        ...
+    ]
+    """
+    sense_details: List[Dict[str, object]] = []
+
+    for idx, sense in enumerate(entry.senses, start=1):
+        pos_labels = _map_pos_labels(getattr(sense, "pos", []) or [])
+        gloss_items: List[Dict[str, str]] = []
+        for g in getattr(sense, "gloss", []) or []:
+            lang = getattr(g, "lang", "eng") or "eng"
+            text = getattr(g, "text", str(g)).strip()
+            if text:
+                gloss_items.append({"lang": lang, "text": text})
+
+        examples = _extract_sense_examples(sense)
+        sense_details.append(
+            {
+                "sense_index": idx,
+                "pos": pos_labels,
+                "gloss": gloss_items,
+                "examples": examples,
+            }
+        )
+
+    return sense_details
 
 
 def _collect_tri_language_gloss(entry) -> Tuple[str, str, str]:
@@ -324,19 +359,31 @@ def main() -> None:
         for entry_idx, entry in enumerate(res.entries, start=1):
             kanji = " / ".join(k.text for k in entry.kanji_forms) if entry.kanji_forms else "-"
             kana = " / ".join(k.text for k in entry.kana_forms) if entry.kana_forms else "-"
-            pos_labels, gloss_cn_en, examples = _collect_sense_details(entry)
+            sense_details = _collect_sense_details(entry)
 
             with st.container(border=True):
                 st.markdown(f"**{entry_idx}. {kanji}**  ({kana})")
-                st.write("词性：" + (" / ".join(pos_labels) if pos_labels else "-") )
-                if gloss_cn_en:
-                    st.write("释义：" + " | ".join(gloss_cn_en))
-                else:
+                if not sense_details:
                     st.write("释义：-")
-                if examples:
-                    st.write("例句：" + " / ".join(examples))
-                else:
-                    st.write("例句：-")
+                for detail in sense_details:
+                    gloss_text = " / ".join(
+                        f"{item['lang']}:{item['text']}" if item["lang"] else item["text"]
+                        for item in detail["gloss"]
+                    ) if detail["gloss"] else "-"
+                    pos_text = " / ".join(detail["pos"]) if detail["pos"] else "-"
+
+                    st.markdown(f"**义项 {detail['sense_index']}**")
+                    st.write("词性：" + pos_text)
+                    st.write("释义：" + gloss_text)
+
+                    if detail["examples"]:
+                        for ex_idx, example in enumerate(detail["examples"], start=1):
+                            jp = example["jp"] or "-"
+                            translation = example["translation"] or "-"
+                            st.write(f"例句 {ex_idx}：{jp}")
+                            st.write(f"翻译 {ex_idx}：{translation}")
+                    else:
+                        st.write("例句：-")
     else:
         st.info("未找到释义。")
 
